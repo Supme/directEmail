@@ -16,13 +16,15 @@ import (
 )
 
 type Data struct {
-	ExtraHeader         []string
-	From string
-	To     string
-	Subject             string
-	Html                string //ToDo add Text
-	Attachments         []string
-	raw                 []byte
+	ExtraHeader []string
+	FromEmail   string
+	FromName    string
+	ToEmail     string
+	ToName      string
+	Subject     string
+	Html        string //ToDo add Text
+	Attachments []string
+	raw         []byte
 }
 
 func (self *Data) get() []byte {
@@ -45,9 +47,17 @@ func (self *Data) Render() {
 		marker = makeMarker()
 	}
 
-	msg.WriteString(`From: ` + encodeRFC2045(self.From) + "\n")
-	msg.WriteString(`To: ` + encodeRFC2045(self.To) + "\n")
+	msg.WriteString("From: ")
+	if self.FromName != "" {
+		msg.WriteString(`"` + encodeRFC2045(self.FromName) + `" `)
+	}
+	msg.WriteString("<" + self.FromEmail + ">\n")
 
+	msg.WriteString("To: ")
+	if self.ToName != "" {
+		msg.WriteString(`"` + encodeRFC2045(self.ToName) + `" `)
+	}
+	msg.WriteString("<" + self.ToEmail + ">\n")
 
 	// -------------- head ----------------------------------------------------------
 

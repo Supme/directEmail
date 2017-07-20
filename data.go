@@ -11,91 +11,155 @@ import (
 	"net/http"
 	"strings"
 	"path/filepath"
+	"mime/quotedprintable"
 	"reflect"
 	"unsafe"
 )
 
-type Data struct {
-	ExtraHeader []string
-	FromEmail   string
-	FromName    string
-	ToEmail     string
-	ToName      string
-	Subject     string
-	Html        string //ToDo add Text
-	Attachments []string
-	raw         []byte
-}
-
-func (self *Data) get() []byte {
+func (self *Email) get() []byte {
 	return self.raw
 }
 
-func (self *Data) Raw(data []byte) {
+func (self *Email) SetRawMessage(data []byte) {
 	self.raw = data
 }
 
-func (self *Data) Render() {
+func (self *Email) GetRawMessage() []byte{
+	return self.raw
+}
+
+func (self *Email) Header(header string) {
+	self.headers = append(self.headers, header)
+}
+
+func (self *Email) Part(contentType, content string) (err error) {
+	var part bytes.Buffer
+	if contentType == TypeTextPlain {
+		_, err = part.WriteString( "Content-Type: " + contentType + ";\n\t charset=\"utf-8\"\nContent-Transfer-Encoding: quoted-printable\n\n")
+		if err != nil {
+			return err
+		}
+		w := quotedprintable.NewWriter(&part)
+		w.Write([]byte(content))
+		w.Close()
+	} else {
+		_, err = part.WriteString( "Content-Type: " + contentType + ";\n\t charset=\"utf-8\"\nContent-Transfer-Encoding: base64\n\n")
+		if err != nil {
+			return err
+		}
+		err = line76(&part, base64.StdEncoding.EncodeToString([]byte(content)))
+		if err != nil {
+			return err
+		}
+	}
+	self.parts = append(self.parts, part.Bytes())
+	return nil
+}
+
+func (self *Email) Attachment(filePath string) (err error) {
 	var (
-		multipart bool = false
+		part    bytes.Buffer
+	  	content []byte
+	)
+	content, err = ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\n\tname=\"%s\"\nContent-Transfer-Encoding: base64\nContent-Disposition: attachment;\n\tfilename=\"%s\"\n\n", http.DetectContentType(content), filepath.Base(filePath), filepath.Base(filePath)))
+	if err != nil {
+		return err
+	}
+	err = line76(&part, base64.StdEncoding.EncodeToString(content))
+	if err != nil {
+		return err
+	}
+	self.parts = append(self.parts, part.Bytes())
+	return nil
+}
+
+func (self *Email) Render() (err error) {
+	var (
 		msg bytes.Buffer
 		marker string
 	)
 
-	if len(self.Attachments) != 0 {
-		multipart = true
-		marker = makeMarker()
+	_, err = msg.WriteString("From: ")
+	if err != nil {
+		return err
 	}
-
-	msg.WriteString("From: ")
 	if self.FromName != "" {
-		msg.WriteString(`"` + encodeRFC2045(self.FromName) + `" `)
+		_, err = msg.WriteString( encodeRFC2045(self.FromName) + " ")
+		if err != nil {
+			return err
+		}
 	}
-	msg.WriteString("<" + self.FromEmail + ">\n")
-
-	msg.WriteString("To: ")
+	_, err = msg.WriteString("<" + self.FromEmail + ">\n")
+	if err != nil {
+		return err
+	}
+	_, err = msg.WriteString("To: ")
+	if err != nil {
+		return err
+	}
 	if self.ToName != "" {
-		msg.WriteString(`"` + encodeRFC2045(self.ToName) + `" `)
+		_, err = msg.WriteString(encodeRFC2045(self.ToName) + " ")
+		if err != nil {
+			return err
+		}
 	}
-	msg.WriteString("<" + self.ToEmail + ">\n")
+	_, err = msg.WriteString("<" + self.ToEmail + ">\n")
+	if err != nil {
+		return err
+	}
 
 	// -------------- head ----------------------------------------------------------
-
-	msg.WriteString("Subject: " + encodeRFC2045(self.Subject) + "\n")
-	msg.WriteString("MIME-Version: 1.0\n")
-	msg.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\n")
-	if multipart {
-		msg.WriteString("Content-Type: multipart/mixed;\n	boundary=\"" + marker + "\"\n")
-	} else {
-		msg.WriteString("Content-Transfer-Encoding: base64\nContent-Type: text/html; charset=\"utf-8\"\n")
+	_, err = msg.WriteString("Subject: " + encodeRFC2045(self.Subject) + "\n")
+	if err != nil {
+		return err
 	}
-	msg.WriteString(strings.Join(self.ExtraHeader, "\n") + "\n")
+	_, err = msg.WriteString("MIME-Version: 1.0\n")
+	if err != nil {
+		return err
+	}
+	_, err = msg.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\n")
+	if err != nil {
+		return err
+	}
+
+
+	_, err = msg.WriteString(strings.Join(self.headers, "\n") + "\n")
+	if err != nil {
+		return err
+	}
+
+	if len(self. parts) > 1 {
+		marker = makeMarker()
+		_, err = msg.WriteString("Content-Type: multipart/mixed;\n\tboundary=\"" + marker + "\"\n\n")
+		if err != nil {
+			return err
+		}
+	}
+
 	// ------------- /head ---------------------------------------------------------
 
 	// ------------- body ----------------------------------------------------------
-	if multipart {
-		msg.WriteString("--" + marker + "\n")
-		msg.WriteString("Content-Transfer-Encoding: base64\nContent-Type: text/html; charset=\"utf-8\"\n\n")
-	}
-	line76(&msg, base64.StdEncoding.EncodeToString([]byte(self.Html)))
-	msg.WriteString("\n")
-	// ------------ /body ---------------------------------------------------------
-
-	// ----------- attachments ----------------------------------------------------
-	for _, file := range self.Attachments {
-		msg.WriteString("\n--" + marker)
-		content, err := ioutil.ReadFile(file)
-		if err != nil {
-			fmt.Println(err)
+	for i := range self. parts {
+		if len(self.parts) > 1 {
+			_, err = msg.WriteString("--" + marker + "\n")
 		}
-		msg.WriteString(fmt.Sprintf("\nContent-Type: %s;\n	name=\"%s\"\nContent-Transfer-Encoding: base64\nContent-Disposition: attachment;\n	filename=\"%s\"\n\n", http.DetectContentType(content), filepath.Base(file), filepath.Base(file)))
-		line76(&msg, base64.StdEncoding.EncodeToString(content))
-		msg.WriteString("\n")
+		_, err = msg.Write(self.parts[i])
+		if err != nil {
+			return err
+		}
+		_, err = msg.WriteString("\n")
+		if err != nil {
+			return err
+		}
 	}
-	// ----------- /attachments ---------------------------------------------------
+	// ------------- /body ----------------------------------------------------------
 
 	self.raw = msg.Bytes()
-	return
+	return nil
 }
 
 func makeMarker() string {
@@ -108,23 +172,38 @@ func makeMarker() string {
 }
 
 
-func line76(target *bytes.Buffer, encoded string) {
+func line76(target *bytes.Buffer, encoded string) (err error) {
 	nbrLines := len(encoded) / 76
 	for i := 0; i < nbrLines; i++ {
-		target.WriteString(encoded[i*76:(i+1)*76])
-		target.WriteString("\n")
+		_, err = target.WriteString(encoded[i*76:(i+1)*76])
+		if err != nil {
+			return err
+		}
+		_, err = target.WriteString("\n")
+		if err != nil {
+			return err
+		}
 	}
-	target.WriteString(encoded[nbrLines*76:])
-	target.WriteString("\n")
+	_, err = target.WriteString(encoded[nbrLines*76:])
+	if err != nil {
+		return err
+	}
+	_, err = target.WriteString("\n")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func encodeRFC2045(s string) string {
 	return mime.BEncoding.Encode("utf-8", s)
 }
 
-func encodeRFC2047(s string) string {
-	return mime.QEncoding.Encode("utf-8", s)
-}
+//
+//func encodeRFC2047(s string) string {
+//	return mime.QEncoding.Encode("utf-8", s)
+//}
 
 // Null memory allocate convert
 func BytesToString(b []byte) string {
@@ -136,12 +215,12 @@ func BytesToString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&stringHeader))
 }
 
-func StringToBytes(s string) []byte {
-	stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	sliceHeader := reflect.SliceHeader{
-		Data: stringHeader.Data,
-		Len: stringHeader.Len,
-		Cap: stringHeader.Len,
-	}
-	return *(*[]byte)(unsafe.Pointer(&sliceHeader))
-}
+//func StringToBytes(s string) []byte {
+//	stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&s))
+//	sliceHeader := reflect.SliceHeader{
+//		Data: stringHeader.Data,
+//		Len: stringHeader.Len,
+//		Cap: stringHeader.Len,
+//	}
+//	return *(*[]byte)(unsafe.Pointer(&sliceHeader))
+//}

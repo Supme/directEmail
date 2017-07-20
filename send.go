@@ -10,12 +10,23 @@ import (
 	"golang.org/x/net/idna"
 )
 
+const (
+	TypeTextHTML = "text/html"
+	TypeTextPlain = "text/plain"
+)
+
 type Email struct {
 	Ip    net.Addr
 	MapIp map[string]string
-	From  string
-	To    string
-	Data  Data
+	FromEmail string
+	FromName  string
+	ToEmail   string
+	ToName    string
+	Subject   string
+
+	headers   []string
+	parts     [][]byte
+	raw       []byte
 }
 
 func New() Email {
@@ -38,7 +49,7 @@ func (self *Email) Send() error {
 		return err
 	}
 
-	splitEmail := strings.SplitN(self.To, "@", 2)
+	splitEmail := strings.SplitN(self.ToEmail, "@", 2)
 	if len(splitEmail) != 2 {
 		return errors.New("550 Bad email")
 	}
@@ -83,11 +94,11 @@ func (self *Email) Send() error {
 		return err
 	}
 
-	if err := c.Mail(self.From); err != nil {
+	if err := c.Mail(self.FromEmail); err != nil {
 		return err
 	}
 
-	if err := c.Rcpt(self.To); err != nil {
+	if err := c.Rcpt(self.ToEmail); err != nil {
 		return err
 	}
 
@@ -96,7 +107,7 @@ func (self *Email) Send() error {
 		return err
 	}
 
-	_, err = fmt.Fprint(w, string(self.Data.raw))
+	_, err = fmt.Fprint(w, BytesToString(self.raw))
 	if err != nil {
 		return err
 	}

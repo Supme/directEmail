@@ -8,6 +8,7 @@ import (
 	"net/smtp"
 	"errors"
 	"golang.org/x/net/idna"
+	"golang.org/x/net/proxy"
 )
 
 const (
@@ -16,8 +17,10 @@ const (
 )
 
 type Email struct {
-	Ip    net.Addr
+	Ip    	  string
+	Host      string
 	MapIp map[string]string
+
 	FromEmail string
 	FromName  string
 	ToEmail   string
@@ -30,24 +33,11 @@ type Email struct {
 }
 
 func New() Email {
-	return Email{Ip: &net.TCPAddr{
-		IP:  net.ParseIP("127.0.0.1"),
-	}}
+	return Email{}
 }
 
 func (self *Email) Send() error {
-
-	var myGlobalIP string
-	myIp,_, err := net.SplitHostPort(self.Ip.String())
-	myGlobalIP, ok := self.MapIp[myIp]
-	if !ok {
-		myGlobalIP = myIp
-	}
-
-	name, err := net.LookupAddr(myGlobalIP)
-	if err != nil && len(name) < 1 {
-		return err
-	}
+	var err error
 
 	splitEmail := strings.SplitN(self.ToEmail, "@", 2)
 	if len(splitEmail) != 2 {
@@ -59,50 +49,24 @@ func (self *Email) Send() error {
 		return errors.New(fmt.Sprintf("550 Domain name failed: %v", err))
 	}
 
-	addr := &net.TCPAddr{
-		IP: net.ParseIP(self.Ip.String()),
-	}
-	iface := net.Dialer{LocalAddr: addr}
-
-	record, err := net.LookupMX(domain)
+	client, err := self.dial(domain)
 	if err != nil {
 		return errors.New(fmt.Sprintf("550 %v", err))
 	}
 
-	var (
-		conn net.Conn
-		server string
-	)
-	for i := range record {
-		server = strings.TrimRight(strings.TrimSpace(record[i].Host), ".")
-		conn, err = iface.Dial("tcp", net.JoinHostPort(server, "25"))
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		return errors.New(fmt.Sprintf("550 %v", err))
-	}
-	conn.SetDeadline(time.Now().Add(5 * time.Minute))
-
-	c, err := smtp.NewClient(conn, server)
-	if err != nil {
+	if err := client.Hello(strings.TrimRight(self.Host, ".")); err != nil {
 		return err
 	}
 
-	if err := c.Hello(strings.TrimRight(name[0], ".")); err != nil {
+	if err := client.Mail(self.FromEmail); err != nil {
 		return err
 	}
 
-	if err := c.Mail(self.FromEmail); err != nil {
+	if err := client.Rcpt(self.ToEmail); err != nil {
 		return err
 	}
 
-	if err := c.Rcpt(self.ToEmail); err != nil {
-		return err
-	}
-
-	w, err := c.Data()
+	w, err := client.Data()
 	if err != nil {
 		return err
 	}
@@ -117,6 +81,91 @@ func (self *Email) Send() error {
 		return err
 	}
 
-	return c.Quit()
+	return client.Quit()
 
+}
+
+type dialer func(network, address string) (net.Conn, error)
+
+func (self *Email) dial(domain string) (client *smtp.Client, err error) {
+	var (
+		conn     net.Conn
+		dialFunc dialer
+	)
+
+	if self.Ip == "" {
+		iface := net.Dialer{}
+		dialFunc = iface.Dial
+debug("Dial function is default network interface\n")
+	} else {
+		if strings.ToLower(self.Ip[0:8]) == "socks://" {
+			iface, err := proxy.SOCKS5("tcp", self.Ip[8:], nil, proxy.FromEnvironment())
+			if err != nil {
+				return nil, err
+			}
+			dialFunc = iface.Dial
+debug("Dial function is socks proxy from ", self.Ip[8:] ,"\n")
+		} else {
+			addr := &net.TCPAddr{
+				IP: net.ParseIP(self.Ip),
+			}
+			iface := net.Dialer{LocalAddr: addr}
+			dialFunc = iface.Dial
+debug("Dial function is ", addr.String() ," network interface\n")
+		}
+	}
+
+	records, err := net.LookupMX(domain)
+	if err != nil {
+		return
+	}
+debug("MX for domain:\n")
+for i:=range records {
+debug(" - ", records[i].Pref, " ", records[i].Host, "\n")
+}
+
+	for i := range records {
+		server := strings.TrimRight(strings.TrimSpace(records[i].Host), ".")
+debug("Connect to server ", server, "\n")
+		conn, err = dialFunc("tcp", net.JoinHostPort(server, "25"))
+		if err != nil {
+debug("Not connected\n")
+			continue
+		}
+debug("Connected\n")
+		client, err = smtp.NewClient(conn, server)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return
+	}
+
+	conn.SetDeadline(time.Now().Add(5 * time.Minute)) // SMTP RFC
+
+	if self.Ip == "" {
+		self.Ip = conn.LocalAddr().String()
+	}
+
+	if self.Host == "" {
+		var myGlobalIP string
+		myIp,_, err := net.SplitHostPort(strings.TrimLeft(self.Ip, "socks://"))
+		myGlobalIP, ok := self.MapIp[myIp]
+		if !ok {
+			myGlobalIP = myIp
+		}
+		names, err := net.LookupAddr(myGlobalIP)
+		if err != nil && len(names) < 1 {
+			return nil, err
+		}
+debug("LookUp ", myGlobalIP, " this result ", names[0], "\n")
+		self.Host = names[0]
+	}
+
+	return
+}
+
+func debug(args ...interface{}) {
+	fmt.Print(args...)
 }

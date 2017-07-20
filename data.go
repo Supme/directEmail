@@ -40,7 +40,7 @@ func (self *Email) Part(contentType, content string) (err error) {
 			return err
 		}
 		w := quotedprintable.NewWriter(&part)
-		w.Write([]byte(content))
+		w.Write([]byte(strings.TrimLeft(content, "\n")))
 		w.Close()
 	} else {
 		_, err = part.WriteString( "Content-Type: " + contentType + ";\n\t charset=\"utf-8\"\nContent-Transfer-Encoding: base64\n\n")
@@ -65,7 +65,7 @@ func (self *Email) Attachment(filePath string) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\n\tname=\"%s\"\nContent-Transfer-Encoding: base64\nContent-Disposition: attachment;\n\tfilename=\"%s\"\n\n", http.DetectContentType(content), filepath.Base(filePath), filepath.Base(filePath)))
+	_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\n\tname=\"%s\"\nContent-Transfer-Encoding: base64\nContent-Disposition: attachment;\n\tfilename=\"%s\"; size=%d;\n\n", http.DetectContentType(content), filepath.Base(filePath), filepath.Base(filePath), len(content)))
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (self *Email) Render() (err error) {
 
 	if len(self. parts) > 1 {
 		marker = makeMarker()
-		_, err = msg.WriteString("Content-Type: multipart/mixed;\n\tboundary=\"" + marker + "\"\n\n")
+		_, err = msg.WriteString("Content-Type: multipart/mixed;\n\tboundary=\"_" + marker + "_\"\n")
 		if err != nil {
 			return err
 		}
@@ -145,16 +145,20 @@ func (self *Email) Render() (err error) {
 	// ------------- body ----------------------------------------------------------
 	for i := range self. parts {
 		if len(self.parts) > 1 {
-			_, err = msg.WriteString("--" + marker + "\n")
+			_, err = msg.WriteString("\n--_" + marker + "_\n")
 		}
 		_, err = msg.Write(self.parts[i])
 		if err != nil {
 			return err
 		}
-		_, err = msg.WriteString("\n")
+		//_, err = msg.WriteString("\n")
 		if err != nil {
 			return err
 		}
+	}
+
+	if len(self. parts) > 1 {
+		_, err = msg.WriteString("\n--_" + marker + "_--")
 	}
 	// ------------- /body ----------------------------------------------------------
 

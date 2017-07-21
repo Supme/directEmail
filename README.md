@@ -40,22 +40,30 @@ func main() {
 
 	email.Subject = "Тест отправки email"
 
-	email.Part(directEmail.TypeTextHTML, `
+	// plain text version
+	email.TextPlain(`Текст моего TEXT сообщения`)
+
+	// html version
+	email.TextHtml(`
 <h2>My email</h2>
-<p>Текст моего сообщения</p>
+<p>Текст моего HTML сообщения</p>
 	`)
 
-	email.Part(directEmail.TypeTextPlain, `
-My email
-Текст моего сообщения
-`)
+	// or html version with related files
+	email.TextHtmlWithRelated(`
+<h2>My email</h2>
+<p>Текст моего HTML with related files сообщения</p>
+<p>Картинка: <img src="cid:myImage.jpg" width="500px" height="250px" border="1px" alt="My image"/></p>
+	`,
+		"/path/to/attach/myImage.jpg",
+	)
 
 	// attach file if need
 	email.Attachment("/path/to/attach/file.jpg")
 
 
 	email.Render()
-	print("\n", string(email.GetRawMessage()), "\n\n\n")
+	print("\n", string(email.GetRawMessageString()), "\n\n\n")
 
 	err := email.Send()
 	if err != nil {

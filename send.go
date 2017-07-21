@@ -9,11 +9,7 @@ import (
 	"errors"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/proxy"
-)
-
-const (
-	TypeTextHTML = "text/html"
-	TypeTextPlain = "text/plain"
+	"bytes"
 )
 
 type Email struct {
@@ -27,9 +23,11 @@ type Email struct {
 	ToName    string
 	Subject   string
 
-	headers   []string
-	parts     [][]byte
-	raw       []byte
+	headers   	[]string
+	textPlain   []byte
+	textHtml    []byte
+	attachments [][]byte
+	raw       	bytes.Buffer
 }
 
 func New() Email {
@@ -71,7 +69,7 @@ func (self *Email) Send() error {
 		return err
 	}
 
-	_, err = fmt.Fprint(w, BytesToString(self.raw))
+	_, err = fmt.Fprint(w, self.GetRawMessageString())
 	if err != nil {
 		return err
 	}

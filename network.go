@@ -2,7 +2,7 @@ package directEmail
 
 import (
 	"fmt"
-	"github.com/pingcap/tidb/_vendor/src/github.com/juju/errors"
+	"errors"
 	"net"
 )
 

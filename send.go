@@ -1,42 +1,55 @@
+// Package directEmail support direct send email from selected interface include SOCKS5 proxy server
 package directEmail
 
 import (
-	"net"
-	"fmt"
-	"strings"
-	"time"
-	"net/smtp"
+	"bytes"
 	"errors"
+	"fmt"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/proxy"
-	"bytes"
+	"net"
+	"net/smtp"
+	"strings"
+	"time"
 )
 
+// A Email contains options for send email.
 type Email struct {
-	Ip    	  string
-	Host      string
+	// Ip contains local IP address wich use for send email
+	// if blank use default interface
+	Ip string
+	// Host is host name
+	// if blank use DNS resolv for field fill
+	Host string
+	// MapIp use for translate local IP to global if NAT
+	// if use Socks server translate IP SOCKS server to real IP
 	MapIp map[string]string
-
+	// FromEmail sender email (Required)
 	FromEmail string
-	FromName  string
-	ToEmail   string
-	ToName    string
-	Subject   string
+	// FromName sender name
+	FromName string
+	// ToEmail recipient email (Required)
+	ToEmail string
+	// ToName recipient name
+	ToName string
+	// Subject email subject
+	Subject string
 
-	headers   	[]string
+	headers     []string
 	textPlain   []byte
 	textHtml    []byte
 	attachments [][]byte
-	raw       	bytes.Buffer
-
+	raw         bytes.Buffer
 }
 
 const debugIs = false
 
+// New returns a new Email instance for create and send email
 func New() Email {
 	return Email{}
 }
 
+// Send sending email message
 func (self *Email) Send() error {
 	var err error
 
@@ -97,7 +110,7 @@ func (self *Email) dial(domain string) (client *smtp.Client, err error) {
 	if self.Ip == "" {
 		iface := net.Dialer{}
 		dialFunc = iface.Dial
-debug("Dial function is default network interface\n")
+		debug("Dial function is default network interface\n")
 	} else {
 		if strings.ToLower(self.Ip[0:8]) == "socks://" {
 			iface, err := proxy.SOCKS5("tcp", self.Ip[8:], nil, proxy.FromEnvironment())
@@ -105,14 +118,14 @@ debug("Dial function is default network interface\n")
 				return nil, err
 			}
 			dialFunc = iface.Dial
-debug("Dial function is socks proxy from ", self.Ip[8:] ,"\n")
+			debug("Dial function is socks proxy from ", self.Ip[8:], "\n")
 		} else {
 			addr := &net.TCPAddr{
 				IP: net.ParseIP(self.Ip),
 			}
 			iface := net.Dialer{LocalAddr: addr}
 			dialFunc = iface.Dial
-debug("Dial function is ", addr.String() ," network interface\n")
+			debug("Dial function is ", addr.String(), " network interface\n")
 		}
 	}
 
@@ -120,20 +133,20 @@ debug("Dial function is ", addr.String() ," network interface\n")
 	if err != nil {
 		return
 	}
-debug("MX for domain:\n")
-for i:=range records {
-debug(" - ", records[i].Pref, " ", records[i].Host, "\n")
-}
+	debug("MX for domain:\n")
+	for i := range records {
+		debug(" - ", records[i].Pref, " ", records[i].Host, "\n")
+	}
 
 	for i := range records {
 		server := strings.TrimRight(strings.TrimSpace(records[i].Host), ".")
-debug("Connect to server ", server, "\n")
+		debug("Connect to server ", server, "\n")
 		conn, err = dialFunc("tcp", net.JoinHostPort(server, "25"))
 		if err != nil {
-debug("Not connected\n")
+			debug("Not connected\n")
 			continue
 		}
-debug("Connected\n")
+		debug("Connected\n")
 		client, err = smtp.NewClient(conn, server)
 		if err == nil {
 			break
@@ -151,7 +164,7 @@ debug("Connected\n")
 
 	if self.Host == "" {
 		var myGlobalIP string
-		myIp,_, err := net.SplitHostPort(strings.TrimLeft(self.Ip, "socks://"))
+		myIp, _, err := net.SplitHostPort(strings.TrimLeft(self.Ip, "socks://"))
 		myGlobalIP, ok := self.MapIp[myIp]
 		if !ok {
 			myGlobalIP = myIp
@@ -160,16 +173,9 @@ debug("Connected\n")
 		if err != nil && len(names) < 1 {
 			return nil, err
 		}
-debug("LookUp ", myGlobalIP, " this result ", names[0], "\n")
+		debug("LookUp ", myGlobalIP, " this result ", names[0], "\n")
 		self.Host = names[0]
 	}
 
 	return
-}
-
-func debug(args ...interface{}) {
-	if debugIs {
-		fmt.Print(args...)
-	}
-
 }

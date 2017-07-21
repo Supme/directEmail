@@ -61,7 +61,6 @@ func main() {
 	// attach file if need
 	email.Attachment("/path/to/attach/file.jpg")
 
-
 	email.Render()
 	print("\n", string(email.GetRawMessageString()), "\n\n\n")
 

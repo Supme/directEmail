@@ -1,8 +1,9 @@
 package directEmail
 
 import (
-	"encoding/base64"
 	"bytes"
+	"encoding/base64"
+	"fmt"
 	"math/rand"
 	"mime"
 )
@@ -19,7 +20,7 @@ func makeMarker() string {
 func line76(target *bytes.Buffer, encoded string) (err error) {
 	nbrLines := len(encoded) / 76
 	for i := 0; i < nbrLines; i++ {
-		_, err = target.WriteString(encoded[i*76:(i+1)*76])
+		_, err = target.WriteString(encoded[i*76 : (i+1)*76])
 		if err != nil {
 			return err
 		}
@@ -42,4 +43,10 @@ func line76(target *bytes.Buffer, encoded string) (err error) {
 
 func encodeRFC2045(s string) string {
 	return mime.BEncoding.Encode("utf-8", s)
+}
+
+func debug(args ...interface{}) {
+	if debugIs {
+		fmt.Print(args...)
+	}
 }

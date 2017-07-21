@@ -59,8 +59,12 @@ My email
 	// attach file if need
 	email.Attachment("/path/to/attach/file.jpg")
 
-
+	// Render email message
 	email.Render()
+
+	// DKIM Signature
+	email.DkimSign("test", []byte("privateKey"))
+
 	print("\n", string(email.GetRawMessageString()), "\n\n\n")
 
 	err := email.Send()

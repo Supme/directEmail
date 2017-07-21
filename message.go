@@ -47,12 +47,12 @@ func (self *Email) Header(headers ...string) {
 func (self *Email) TextPlain(content string) (err error) {
 	var part bytes.Buffer
 	defer part.Reset()
-	_, err = part.WriteString("Content-Type: text/plain;\n\t charset=\"utf-8\"\nContent-Transfer-Encoding: quoted-printable\n\n")
+	_, err = part.WriteString("Content-Type: text/plain;\r\n\t charset=\"utf-8\"\r\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n")
 	if err != nil {
 		return err
 	}
 	w := quotedprintable.NewWriter(&part)
-	w.Write([]byte(strings.TrimLeft(content, "\n")))
+	w.Write([]byte(strings.TrimLeft(content, "\r\n")))
 	w.Close()
 	self.textPlain = part.Bytes()
 	return nil
@@ -62,7 +62,7 @@ func (self *Email) TextPlain(content string) (err error) {
 func (self *Email) TextHtml(content string) (err error) {
 	var part bytes.Buffer
 	defer part.Reset()
-	_, err = part.WriteString("Content-Type: text/html;\n\t charset=\"utf-8\"\nContent-Transfer-Encoding: base64\n\n")
+	_, err = part.WriteString("Content-Type: text/html;\r\n\t charset=\"utf-8\"\r\nContent-Transfer-Encoding: base64\r\n\r\n")
 	if err != nil {
 		return err
 	}
@@ -89,16 +89,16 @@ func (self *Email) TextHtmlWithRelated(content string, files ...string) (err err
 	defer part.Reset()
 
 	marker := makeMarker()
-	_, err = part.WriteString("Content-Type: multipart/related;\n\tboundary=\"" + marker + "\"\n")
+	_, err = part.WriteString("Content-Type: multipart/related;\r\n\tboundary=\"" + marker + "\"\r\n")
 	if err != nil {
 		return err
 	}
 
-	_, err = part.WriteString("\n--" + marker + "\n")
+	_, err = part.WriteString("\r\n--" + marker + "\r\n")
 	if err != nil {
 		return err
 	}
-	_, err = part.WriteString("Content-Type: text/html;\n\t charset=\"utf-8\"\nContent-Transfer-Encoding: base64\n\n")
+	_, err = part.WriteString("Content-Type: text/html;\r\n\t charset=\"utf-8\"\r\nContent-Transfer-Encoding: base64\r\n\r\n")
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (self *Email) TextHtmlWithRelated(content string, files ...string) (err err
 	}
 
 	for i := range files {
-		_, err = part.WriteString("\n--" + marker + "\n")
+		_, err = part.WriteString("\r\n--" + marker + "\r\n")
 		if err != nil {
 			return err
 		}
@@ -116,7 +116,7 @@ func (self *Email) TextHtmlWithRelated(content string, files ...string) (err err
 		if err != nil {
 			return err
 		}
-		_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\n\tname=\"%s\"\nContent-Transfer-Encoding: base64\nContent-ID: <%s>\nContent-Disposition: inline;\n\tfilename=\"%s\"; size=%d;\n\n", http.DetectContentType(data), filepath.Base(files[i]), filepath.Base(files[i]), filepath.Base(files[i]), len(data)))
+		_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\r\n\tname=\"%s\"\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <%s>\r\nContent-Disposition: inline;\r\n\tfilename=\"%s\"; size=%d;\r\n\r\n", http.DetectContentType(data), filepath.Base(files[i]), filepath.Base(files[i]), filepath.Base(files[i]), len(data)))
 		if err != nil {
 			return err
 		}
@@ -125,7 +125,7 @@ func (self *Email) TextHtmlWithRelated(content string, files ...string) (err err
 			return err
 		}
 	}
-	_, err = part.WriteString("\n--" + marker + "--\n")
+	_, err = part.WriteString("\r\n--" + marker + "--\r\n")
 
 	self.textHtml = part.Bytes()
 	return nil
@@ -143,7 +143,7 @@ func (self *Email) Attachment(files ...string) (err error) {
 		if err != nil {
 			return err
 		}
-		_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\n\tname=\"%s\"\nContent-Transfer-Encoding: base64\nContent-Disposition: attachment;\n\tfilename=\"%s\"; size=%d;\n\n", http.DetectContentType(data), filepath.Base(files[i]), filepath.Base(files[i]), len(data)))
+		_, err = part.WriteString(fmt.Sprintf("Content-Type: %s;\r\n\tname=\"%s\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment;\r\n\tfilename=\"%s\"; size=%d;\r\n\r\n", http.DetectContentType(data), filepath.Base(files[i]), filepath.Base(files[i]), len(data)))
 		if err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func (self *Email) Render() (err error) {
 			return err
 		}
 	}
-	_, err = self.raw.WriteString("<" + self.FromEmail + ">\n")
+	_, err = self.raw.WriteString("<" + self.FromEmail + ">\r\n")
 	if err != nil {
 		return err
 	}
@@ -188,25 +188,20 @@ func (self *Email) Render() (err error) {
 			return err
 		}
 	}
-	_, err = self.raw.WriteString("<" + self.ToEmail + ">\n")
+	_, err = self.raw.WriteString("<" + self.ToEmail + ">\r\n")
 	if err != nil {
 		return err
 	}
 
-	_, err = self.raw.WriteString("Subject: " + encodeRFC2045(self.Subject) + "\n")
+	_, err = self.raw.WriteString("Subject: " + encodeRFC2045(self.Subject) + "\r\n")
 	if err != nil {
 		return err
 	}
-	_, err = self.raw.WriteString("MIME-Version: 1.0\n")
+	_, err = self.raw.WriteString("MIME-Version: 1.0\r\n")
 	if err != nil {
 		return err
 	}
-	_, err = self.raw.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\n")
-	if err != nil {
-		return err
-	}
-
-	_, err = self.raw.WriteString(strings.Join(self.headers, "\n") + "\n")
+	_, err = self.raw.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	if err != nil {
 		return err
 	}
@@ -214,17 +209,25 @@ func (self *Email) Render() (err error) {
 	// Email has attachment?
 	if len(self.attachments) > 0 {
 		marker = makeMarker()
-		_, err = self.raw.WriteString("Content-Type: multipart/mixed;\n\tboundary=\"" + marker + "\"\n")
+		_, err = self.raw.WriteString("Content-Type: multipart/mixed;\r\n\tboundary=\"" + marker + "\"\r\n")
 		if err != nil {
 			return err
 		}
+	}
+
+	_, err = self.raw.WriteString(strings.Join(self.headers, "\r\n"))
+	if err != nil {
+		return err
+	}
+	if len(self.headers) > 0 {
+		_, err = self.raw.WriteString("\r\n")
 	}
 
 	// ------------- /head ---------------------------------------------------------
 
 	if len(self.textPlain) > 0 || len(self.textHtml) > 0 {
 		if marker != "" {
-			_, err = self.raw.WriteString("\n--" + marker + "\n")
+			_, err = self.raw.WriteString("\r\n--" + marker + "\r\n")
 		}
 		err = self.renderText()
 		if err != nil {
@@ -234,7 +237,7 @@ func (self *Email) Render() (err error) {
 
 	// ------------- attachments ----------------------------------------------------------
 	for i := range self.attachments {
-		_, err = self.raw.WriteString("\n--" + marker + "\n")
+		_, err = self.raw.WriteString("\r\n--" + marker + "\r\n")
 		if err != nil {
 			return err
 		}
@@ -249,7 +252,7 @@ func (self *Email) Render() (err error) {
 	// ------------- /attachments ----------------------------------------------------------
 
 	if marker != "" {
-		_, err = self.raw.WriteString("\n--" + marker + "--\n")
+		_, err = self.raw.WriteString("\r\n--" + marker + "--\r\n")
 	}
 
 	return nil
@@ -262,14 +265,14 @@ func (self *Email) renderText() error {
 	)
 	if len(self.textPlain) > 0 && len(self.textHtml) > 0 {
 		marker = makeMarker()
-		_, err = self.raw.WriteString("Content-Type: multipart/alternative;\n\tboundary=\"" + marker + "\"\n")
+		_, err = self.raw.WriteString("Content-Type: multipart/alternative;\r\n\tboundary=\"" + marker + "\"\r\n")
 		if err != nil {
 			return err
 		}
 	}
 
 	if marker != "" {
-		_, err = self.raw.WriteString("\n--" + marker + "\n")
+		_, err = self.raw.WriteString("\r\n--" + marker + "\r\n")
 	}
 
 	if len(self.textPlain) > 0 {
@@ -280,7 +283,7 @@ func (self *Email) renderText() error {
 	}
 
 	if marker != "" {
-		_, err = self.raw.WriteString("\n--" + marker + "\n")
+		_, err = self.raw.WriteString("\r\n--" + marker + "\r\n")
 	}
 
 	if len(self.textHtml) > 0 {
@@ -291,7 +294,7 @@ func (self *Email) renderText() error {
 	}
 
 	if marker != "" {
-		_, err = self.raw.WriteString("\n--" + marker + "--\n")
+		_, err = self.raw.WriteString("\r\n--" + marker + "--\r\n")
 	}
 
 	return nil

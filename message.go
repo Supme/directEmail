@@ -13,11 +13,13 @@ import (
 )
 
 func (self *Email) SetRawMessageBytes(data []byte) error {
+	self.raw.Reset()
 	_, err := self.raw.Write(data)
 	return err
 }
 
 func (self *Email) SetRawMessageString(data string) error {
+	self.raw.Reset()
 	_, err := self.raw.WriteString(data)
 	return err
 }
@@ -97,7 +99,6 @@ func (self *Email) TextHtmlWithRelated(content string, files ...string) (err err
 		if err != nil {
 			return err
 		}
-
 		data, err = ioutil.ReadFile(files[i])
 		if err != nil {
 			return err
@@ -110,7 +111,6 @@ func (self *Email) TextHtmlWithRelated(content string, files ...string) (err err
 		if err != nil {
 			return err
 		}
-
 	}
 	_, err = part.WriteString("\n--" + marker + "--\n")
 
@@ -193,7 +193,7 @@ func (self *Email) Render() (err error) {
 		return err
 	}
 
-	// Email has text and attachment?
+	// Email has attachment?
 	if len(self.attachments) > 0 {
 		marker = makeMarker()
 		_, err = self.raw.WriteString("Content-Type: multipart/mixed;\n\tboundary=\"" + marker + "\"\n")

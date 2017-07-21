@@ -28,7 +28,10 @@ type Email struct {
 	textHtml    []byte
 	attachments [][]byte
 	raw       	bytes.Buffer
+
 }
+
+const debugIs = false
 
 func New() Email {
 	return Email{}
@@ -165,5 +168,8 @@ debug("LookUp ", myGlobalIP, " this result ", names[0], "\n")
 }
 
 func debug(args ...interface{}) {
-	fmt.Print(args...)
+	if debugIs {
+		fmt.Print(args...)
+	}
+
 }

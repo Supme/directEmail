@@ -65,7 +65,7 @@ func main() {
 	email.Render()
 	
 	// DKIM Signature
-	email.DkimSign("test", []byte("privateKey"))
+	email.DkimSign("myselector", []byte("privateKey"))
 	
 	print("\n", string(email.GetRawMessageString()), "\n\n\n")
 

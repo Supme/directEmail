@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"math/rand"
 	"mime"
+	"strings"
+	"errors"
+	"golang.org/x/net/idna"
 )
 
-func makeMarker() string {
+func (self *Email) makeMarker() string {
 	b := make([]byte, 30)
 	rand.Read(b)
 	en := base64.StdEncoding // or URLEncoding
@@ -17,7 +20,7 @@ func makeMarker() string {
 	return "_" + string(d) + "_"
 }
 
-func line76(target *bytes.Buffer, encoded string) (err error) {
+func (self *Email) line76(target *bytes.Buffer, encoded string) (err error) {
 	nbrLines := len(encoded) / 76
 	for i := 0; i < nbrLines; i++ {
 		_, err = target.WriteString(encoded[i*76 : (i+1)*76])
@@ -41,8 +44,22 @@ func line76(target *bytes.Buffer, encoded string) (err error) {
 	return nil
 }
 
-func encodeRFC2045(s string) string {
+func (self *Email) encodeRFC2045(s string) string {
 	return mime.BEncoding.Encode("utf-8", s)
+}
+
+func (self *Email) domainFromEmail(email string) (string, error){
+	splitEmail := strings.SplitN(email, "@", 2)
+	if len(splitEmail) != 2 {
+		return "", errors.New("Bad from email address")
+	}
+
+	domain, err := idna.ToASCII(strings.TrimRight(splitEmail[1], "."))
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("Domain name failed: %v", err))
+	}
+
+	return domain, nil
 }
 
 func debug(args ...interface{}) {

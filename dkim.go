@@ -2,32 +2,35 @@ package directEmail
 
 import (
 	dkim "github.com/toorop/go-dkim"
-	"strings"
-	"fmt"
-	"errors"
-	"golang.org/x/net/idna"
 )
 
 // DkimSign add DKIM signature email
+// Generate private key:
+//  openssl genrsa -out /path/to/key/example.com.key 2048
+// Generate public key:
+//  openssl rsa -in /path/to/key/example.com.key -pubout
+// Add public key to DNS myselector._domainkey.example.com TXT record
+//  k=rsa; p=MIGfMA0GC...
 func (self *Email) DkimSign(selector string, privateKey []byte) error {
-	splitEmail := strings.SplitN(self.FromEmail, "@", 2)
-	if len(splitEmail) != 2 {
-		return errors.New("Bad from email address")
-	}
-
-	domain, err := idna.ToASCII(strings.TrimRight(splitEmail[1], "."))
+	domain, err := self.domainFromEmail(self.FromEmail)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Domain name failed: %v", err))
+		return err
 	}
 	options := dkim.NewSigOptions()
 	options.PrivateKey = privateKey
 	options.Domain = domain
 	options.Selector = selector
-	options.Headers = []string{"from", "to", "date", "subject"}
+	options.Algo = "rsa-sha1"
+	options.Headers = []string{"from", "to", "subject"}
 	options.AddSignatureTimestamp = true
-	options.Canonicalization = "relaxed/relaxed"
+	options.Canonicalization = "simple/simple"
 
 	email :=  self.GetRawMessageBytes()
+
+	if self.bodyLenght >= 50 {
+		options.BodyLength = 50
+	}
+
 	err = dkim.Sign(&email, options)
 	if err != nil {
 		return err

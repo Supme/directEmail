@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"golang.org/x/net/idna"
 	"golang.org/x/net/proxy"
 	"net"
 	"net/smtp"
@@ -35,11 +34,12 @@ type Email struct {
 	// Subject email subject
 	Subject string
 
-	headers     []string
-	textPlain   []byte
-	textHtml    []byte
-	attachments [][]byte
-	raw         bytes.Buffer
+	headers         []string
+	textPlain       []byte
+	textHtml        []byte
+	attachments     [][]byte
+	raw             bytes.Buffer
+	bodyLenght 		int
 }
 
 const debugIs = false
@@ -53,14 +53,9 @@ func New() Email {
 func (self *Email) Send() error {
 	var err error
 
-	splitEmail := strings.SplitN(self.ToEmail, "@", 2)
-	if len(splitEmail) != 2 {
-		return errors.New("550 Bad email")
-	}
-
-	domain, err := idna.ToASCII(splitEmail[1])
+	domain, err := self.domainFromEmail(self.ToEmail)
 	if err != nil {
-		return errors.New(fmt.Sprintf("550 Domain name failed: %v", err))
+		return errors.New("550 Bad ToEmail")
 	}
 
 	client, err := self.dial(domain)
@@ -85,7 +80,7 @@ func (self *Email) Send() error {
 		return err
 	}
 
-	_, err = fmt.Fprint(w, self.GetRawMessageString())
+	_, err = fmt.Fprint(w, self.raw.String())
 	if err != nil {
 		return err
 	}

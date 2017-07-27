@@ -159,7 +159,7 @@ func (self *Email) Attachment(files ...string) (err error) {
 }
 
 // Render added text/html, text/plain, attachments part to raw view
-func (self *Email) Render(dkimSelector string, dkimPrivateKey []byte) (err error) {
+func (self *Email) Render() (err error) {
 	return self.RenderWithDkim("", []byte{})
 }
 

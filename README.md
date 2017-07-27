@@ -62,10 +62,8 @@ func main() {
 	email.Attachment("/path/to/attach/file.jpg")
 
 	// Render email message
-	email.Render()
-	
-	// DKIM Signature
-	email.DkimSign("myselector", []byte("privateKey"))
+	// if dkimSelector not blank, then add DKIM signature to message
+	email.Render("myDKIMselector", []byte("DKIMprivateKey"))
 	
 	print("\n", string(email.GetRawMessageString()), "\n\n\n")
 

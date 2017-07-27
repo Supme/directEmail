@@ -159,7 +159,14 @@ func (self *Email) Attachment(files ...string) (err error) {
 }
 
 // Render added text/html, text/plain, attachments part to raw view
-func (self *Email) Render() (err error) {
+// If dkim selector not blank add DKIM signature email
+// Generate private key:
+//  openssl genrsa -out /path/to/key/example.com.key 2048
+// Generate public key:
+//  openssl rsa -in /path/to/key/example.com.key -pubout
+// Add public key to DNS myselector._domainkey.example.com TXT record
+//  k=rsa; p=MIGfMA0GC...
+func (self *Email) Render(dkimSelector string, dkimPrivateKey []byte) (err error) {
 	var (
 		marker string
 	)
@@ -275,7 +282,16 @@ func (self *Email) Render() (err error) {
 	}
 	// ------------ /blank email -----------------------------------------------------------
 
+	// ------------ DKIM -------------------------------------------------------------------
 	self.bodyLenght = self.raw.Len() - startBody
+
+	if dkimSelector != "" {
+		err = self.dkimSign(dkimSelector, dkimPrivateKey)
+		if err != nil {
+			return err
+		}
+	}
+	// ------------ /DKIM ------------------------------------------------------------------
 
 	return nil
 }

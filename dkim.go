@@ -4,14 +4,7 @@ import (
 	dkim "github.com/toorop/go-dkim"
 )
 
-// DkimSign add DKIM signature email
-// Generate private key:
-//  openssl genrsa -out /path/to/key/example.com.key 2048
-// Generate public key:
-//  openssl rsa -in /path/to/key/example.com.key -pubout
-// Add public key to DNS myselector._domainkey.example.com TXT record
-//  k=rsa; p=MIGfMA0GC...
-func (self *Email) DkimSign(selector string, privateKey []byte) error {
+func (self *Email) dkimSign(selector string, privateKey []byte) error {
 	domain, err := self.domainFromEmail(self.FromEmail)
 	if err != nil {
 		return err

@@ -60,8 +60,10 @@ My email
 	email.Attachment("/path/to/attach/file.jpg")
 
 	// Render email message
+	email.Render()
+
 	// if dkimSelector not blank, then add DKIM signature to message
-	email.Render("myDKIMselector", []byte("DKIMprivateKey"))
+	email.RenderWithDkim("myDKIMselector", []byte("DKIMprivateKey"))
 
 	print("\n", string(email.GetRawMessageString()), "\n\n\n")
 

@@ -159,6 +159,11 @@ func (self *Email) Attachment(files ...string) (err error) {
 }
 
 // Render added text/html, text/plain, attachments part to raw view
+func (self *Email) Render(dkimSelector string, dkimPrivateKey []byte) (err error) {
+	return self.RenderWithDkim("", []byte{})
+}
+
+// Render added text/html, text/plain, attachments part to raw view
 // If dkim selector not blank add DKIM signature email
 // Generate private key:
 //  openssl genrsa -out /path/to/key/example.com.key 2048
@@ -166,7 +171,7 @@ func (self *Email) Attachment(files ...string) (err error) {
 //  openssl rsa -in /path/to/key/example.com.key -pubout
 // Add public key to DNS myselector._domainkey.example.com TXT record
 //  k=rsa; p=MIGfMA0GC...
-func (self *Email) Render(dkimSelector string, dkimPrivateKey []byte) (err error) {
+func (self *Email) RenderWithDkim(dkimSelector string, dkimPrivateKey []byte) (err error) {
 	var (
 		marker string
 	)

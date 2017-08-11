@@ -8,18 +8,24 @@ import (
 	"golang.org/x/net/proxy"
 	"net"
 	"net/smtp"
+	"net/url"
 	"strings"
 	"time"
+	"crypto/tls"
 )
 
 // A Email contains options for send email.
 type Email struct {
 	// Ip contains local IP address wich use for send email
 	// if blank use default interface
+	// if use socks5 proxy "socks://123.124.125.126:8080"
+	// and with auth "socks://user:password@123.124.125.126:8080"
 	Ip string
 	// Host is host name
 	// if blank use DNS resolv for field fill
 	Host string
+	// Port SMTP server port
+	Port uint16
 	// MapIp use for translate local IP to global if NAT
 	// if use Socks server translate IP SOCKS server to real IP
 	MapIp map[string]string
@@ -46,25 +52,88 @@ const debugIs = false
 
 // New returns a new Email instance for create and send email
 func New() Email {
-	return Email{}
+	return Email{Port: 25}
 }
 
-// Send sending email message
+// SendThroughServer send email from SMTP server
+func (self *Email) SendThroughServer(host string, port uint16, username, password string) error {
+	self.Port = port
+
+	dialFunc,err := self.dialFunction()
+	debug("Dialer selected, now dial to server\n")
+
+	conn, err := dialFunc("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", self.Port)))
+	if err != nil {
+		debug("Not connected\n")
+		return err
+	}
+	debug("Connected\n")
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+
+	auth := smtp.PlainAuth(
+		"",
+		username,
+		password,
+		host,
+	)
+	self.Host = "localhost"
+
+	debug("Connected, now send email\n")
+	return self.send(auth, host, client)
+}
+
+// Send email directly
 func (self *Email) Send() error {
 	var err error
 
-	domain, err := self.domainFromEmail(self.ToEmail)
+	server, err := self.domainFromEmail(self.ToEmail)
 	if err != nil {
 		return errors.New("550 Bad ToEmail")
 	}
 
-	client, err := self.dial(domain)
+	dialFunc,err := self.dialFunction()
 	if err != nil {
 		return errors.New(fmt.Sprintf("550 %v", err))
 	}
 
+	client, err := self.newClient(server, dialFunc)
+	if err != nil {
+		return errors.New(fmt.Sprintf("550 %v", err))
+	}
+	defer client.Close()
+
+	return self.send(nil, "", client)
+}
+
+var testHookStartTLS func(*tls.Config)
+
+// Send sending email message
+func (self *Email) send(auth smtp.Auth, host string, client *smtp.Client) error {
+	var	err error
+
 	if err := client.Hello(strings.TrimRight(self.Host, ".")); err != nil {
 		return err
+	}
+
+	if auth != nil {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			config := &tls.Config{ServerName: host}
+			if testHookStartTLS != nil {
+				testHookStartTLS(config)
+			}
+			if err = client.StartTLS(config); err != nil {
+				return err
+			}
+		}
+		if auth != nil {
+			if err = client.Auth(auth); err != nil {
+				return err
+			}
+		}
 	}
 
 	if err := client.Mail(self.FromEmail); err != nil {
@@ -94,13 +163,10 @@ func (self *Email) Send() error {
 
 }
 
-type dialer func(network, address string) (net.Conn, error)
+type conn func(network, address string) (net.Conn, error)
 
-func (self *Email) dial(domain string) (client *smtp.Client, err error) {
-	var (
-		conn     net.Conn
-		dialFunc dialer
-	)
+func (self *Email) dialFunction() (conn, error){
+	var dialFunc conn
 
 	if self.Ip == "" {
 		iface := net.Dialer{}
@@ -108,10 +174,26 @@ func (self *Email) dial(domain string) (client *smtp.Client, err error) {
 		debug("Dial function is default network interface\n")
 	} else {
 		if strings.ToLower(self.Ip[0:8]) == "socks://" {
-			iface, err := proxy.SOCKS5("tcp", self.Ip[8:], nil, proxy.FromEnvironment())
+			u, err := url.Parse(self.Ip)
 			if err != nil {
-				return nil, err
+				return nil, errors.New(fmt.Sprintf("Error parse socks: %s", err.Error()))
 			}
+			var iface proxy.Dialer
+			if u.User != nil {
+				var auth *proxy.Auth
+				auth.User = u.User.Username()
+				auth.Password, _ = u.User.Password()
+				iface, err = proxy.SOCKS5("tcp", u.Host, auth, proxy.FromEnvironment())
+				if err != nil {
+					return dialFunc, err
+				}
+			} else {
+				iface, err = proxy.SOCKS5("tcp", u.Host, nil, proxy.FromEnvironment())
+				if err != nil {
+					return dialFunc, err
+				}
+			}
+
 			dialFunc = iface.Dial
 			debug("Dial function is socks proxy from ", self.Ip[8:], "\n")
 		} else {
@@ -124,7 +206,14 @@ func (self *Email) dial(domain string) (client *smtp.Client, err error) {
 		}
 	}
 
-	records, err := net.LookupMX(domain)
+	return dialFunc, nil
+}
+
+
+func (self *Email) newClient(server string, dialFunc conn) (client *smtp.Client, err error) {
+	var	conn net.Conn
+
+	records, err := net.LookupMX(server)
 	if err != nil {
 		return
 	}
@@ -136,7 +225,7 @@ func (self *Email) dial(domain string) (client *smtp.Client, err error) {
 	for i := range records {
 		server := strings.TrimRight(strings.TrimSpace(records[i].Host), ".")
 		debug("Connect to server ", server, "\n")
-		conn, err = dialFunc("tcp", net.JoinHostPort(server, "25"))
+		conn, err = dialFunc("tcp", net.JoinHostPort(server, fmt.Sprintf("%d", self.Port)))
 		if err != nil {
 			debug("Not connected\n")
 			continue

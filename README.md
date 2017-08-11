@@ -16,7 +16,9 @@ func main() {
 
 	// if use socks5 proxy
 	email.Ip = "socks://123.124.125.126:8080"
-
+	// or with auth
+    email.Ip = "socks://user:password@123.124.125.126:8080"
+    
 	// if use specified interface
 	email.Ip = "192.168.0.10"
 
@@ -60,7 +62,7 @@ func main() {
 
 	// attach file if need
 	email.Attachment("/path/to/attach/file.jpg")
-
+    
 	// Render email message
 	email.Render()
 	
@@ -74,5 +76,10 @@ func main() {
 		print("Send email with error:", err.Error())
 	}
 
+	// or send from SMTP server use login and password
+	err := email.SendThroughServer("smtp.server.tld", 587, "username", "password")
+	if err != nil {
+		print("Send email with error:\n", err.Error(), "\n")
+	}
 }
 ```

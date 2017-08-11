@@ -17,7 +17,7 @@ func main() {
 	// if use socks5 proxy
 	email.Ip = "socks://123.124.125.126:8080"
 	// or with auth
-    email.Ip = "socks://user:password@123.124.125.126:8080"
+	email.Ip = "socks://user:password@123.124.125.126:8080"
     
 	// if use specified interface
 	email.Ip = "192.168.0.10"

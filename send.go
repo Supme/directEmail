@@ -180,10 +180,10 @@ func (self *Email) dialFunction() (conn, error){
 			}
 			var iface proxy.Dialer
 			if u.User != nil {
-				var auth *proxy.Auth
+				auth := proxy.Auth{}
 				auth.User = u.User.Username()
 				auth.Password, _ = u.User.Password()
-				iface, err = proxy.SOCKS5("tcp", u.Host, auth, proxy.FromEnvironment())
+				iface, err = proxy.SOCKS5("tcp", u.Host, &auth, proxy.FromEnvironment())
 				if err != nil {
 					return dialFunc, err
 				}
@@ -193,7 +193,7 @@ func (self *Email) dialFunction() (conn, error){
 					return dialFunc, err
 				}
 			}
-
+			self.Ip = u.Host
 			dialFunc = iface.Dial
 			debug("Dial function is socks proxy from ", self.Ip[8:], "\n")
 		} else {

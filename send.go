@@ -115,6 +115,9 @@ var testHookStartTLS func(*tls.Config)
 func (self *Email) send(auth smtp.Auth, host string, client *smtp.Client) error {
 	var	err error
 
+	self.ToEmail = strings.TrimSpace(self.ToEmail)
+	self.FromEmail = strings.TrimSpace(self.FromEmail)
+
 	if err := client.Hello(strings.TrimRight(self.Host, ".")); err != nil {
 		return err
 	}

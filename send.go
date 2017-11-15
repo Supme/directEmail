@@ -16,7 +16,7 @@ import (
 
 // A Email contains options for send email.
 type Email struct {
-	// Ip contains local IP address wich use for send email
+	// Ip contains local IP address which use for send email
 	// if blank use default interface
 	// if use socks5 proxy "socks://123.124.125.126:8080"
 	// and with auth "socks://user:password@123.124.125.126:8080"

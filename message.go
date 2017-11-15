@@ -340,5 +340,5 @@ func (slf *Email) renderText() error {
 		_, err = slf.raw.WriteString("\r\n--" + marker + "--\r\n")
 	}
 
-	return nil
+	return err
 }

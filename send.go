@@ -48,7 +48,10 @@ type Email struct {
 	bodyLenght  int
 }
 
-const debugIs = false
+const (
+	debugIs     = true
+	connTimeout = 5 * time.Minute // SMTP RFC
+)
 
 // New returns a new Email instance for create and send email
 func New() Email {
@@ -67,7 +70,13 @@ func (slf *Email) SendThroughServer(host string, port uint16, username, password
 		debug("Not connected\n")
 		return err
 	}
+	defer conn.Close()
 	debug("Connected\n")
+
+	err = conn.SetDeadline(time.Now().Add(connTimeout + time.Millisecond*10))
+	if err != nil {
+		return err
+	}
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -83,14 +92,14 @@ func (slf *Email) SendThroughServer(host string, port uint16, username, password
 	slf.Host = "localhost"
 
 	debug("Connected, now send email\n")
-	return slf.send(auth, host, client)
+
+	slf.cleanEmail()
+	return slf.sendWithTimeout(auth, host, client)
 }
 
 // Send email directly
 func (slf *Email) Send() error {
 	var err error
-
-	slf.cleanEmail()
 
 	server, err := slf.domainFromEmail(slf.ToEmail)
 	if err != nil {
@@ -102,13 +111,16 @@ func (slf *Email) Send() error {
 		return fmt.Errorf("421 %v", err)
 	}
 
-	client, err := slf.newClient(server, dialFunc)
+	conn, err := slf.newClient(server, dialFunc)
 	if err != nil {
+		debug("Not connected\n")
 		return fmt.Errorf("421 %v", err)
 	}
-	defer client.Close()
+	defer conn.Close()
+	debug("Connected\n")
 
-	return slf.send(nil, "", client)
+	slf.cleanEmail()
+	return slf.sendWithTimeout(nil, "", conn)
 }
 
 func (slf *Email) cleanEmail() {
@@ -118,7 +130,25 @@ func (slf *Email) cleanEmail() {
 
 var testHookStartTLS func(*tls.Config)
 
-// Send sending email message
+// sendWithTimeout hack for bad server
+func (slf *Email) sendWithTimeout(auth smtp.Auth, host string, client *smtp.Client) error {
+	var res error
+	err := make(chan error, 1)
+	go func() {
+		err <- slf.send(auth, host, client)
+	}()
+
+	select {
+	case res = <-err:
+
+	case <-time.After(connTimeout):
+		res = fmt.Errorf("421 send timeout after %s", connTimeout.String())
+	}
+
+	return res
+}
+
+// send sending email message
 func (slf *Email) send(auth smtp.Auth, host string, client *smtp.Client) error {
 	var err error
 
@@ -207,7 +237,9 @@ func (slf *Email) dialFunction() (conn, error) {
 			addr := &net.TCPAddr{
 				IP: net.ParseIP(slf.Ip),
 			}
-			iface := net.Dialer{LocalAddr: addr}
+			iface := net.Dialer{
+				LocalAddr: addr,
+			}
 			dialFunc = iface.Dial
 			debug("Dial function is ", addr.String(), " network interface\n")
 		}
@@ -246,7 +278,11 @@ func (slf *Email) newClient(server string, dialFunc conn) (client *smtp.Client, 
 		return
 	}
 
-	conn.SetDeadline(time.Now().Add(5 * time.Minute)) // SMTP RFC
+	deadline := time.Now().Add(connTimeout + time.Millisecond*10)
+	err = conn.SetDeadline(deadline)
+	if err != nil {
+		return
+	}
 
 	if slf.Ip == "" {
 		slf.Ip = conn.LocalAddr().String()

@@ -49,7 +49,7 @@ type Email struct {
 }
 
 const (
-	debugIs     = true
+	debugIs     = false
 	connTimeout = 5 * time.Minute // SMTP RFC
 )
 

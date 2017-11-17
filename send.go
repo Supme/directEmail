@@ -278,8 +278,7 @@ func (slf *Email) newClient(server string, dialFunc conn) (client *smtp.Client, 
 		return
 	}
 
-	deadline := time.Now().Add(connTimeout + time.Millisecond*10)
-	err = conn.SetDeadline(deadline)
+	err = conn.SetDeadline(time.Now().Add(connTimeout + time.Millisecond*10))
 	if err != nil {
 		return
 	}

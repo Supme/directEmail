@@ -41,7 +41,7 @@ type Email struct {
 
 	headers     []string
 	textPlain   []byte
-	textHtml    []byte
+	textHTML    []byte
 	attachments [][]byte
 	raw         bytes.Buffer
 	bodyLenght  int

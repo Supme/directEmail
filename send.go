@@ -3,6 +3,7 @@ package directEmail
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"golang.org/x/net/proxy"
@@ -10,8 +11,6 @@ import (
 	"net/smtp"
 	"net/url"
 	"strings"
-	"time"
-	"crypto/tls"
 )
 
 // A Email contains options for send email.
@@ -40,12 +39,12 @@ type Email struct {
 	// Subject email subject
 	Subject string
 
-	headers         []string
-	textPlain       []byte
-	textHtml        []byte
-	attachments     [][]byte
-	raw             bytes.Buffer
-	bodyLenght 		int
+	headers     []string
+	textPlain   []byte
+	textHtml    []byte
+	attachments [][]byte
+	raw         bytes.Buffer
+	bodyLenght  int
 }
 
 const debugIs = false
@@ -59,7 +58,7 @@ func New() Email {
 func (self *Email) SendThroughServer(host string, port uint16, username, password string) error {
 	self.Port = port
 
-	dialFunc,err := self.dialFunction()
+	dialFunc, err := self.dialFunction()
 	debug("Dialer selected, now dial to server\n")
 
 	conn, err := dialFunc("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", self.Port)))
@@ -80,7 +79,10 @@ func (self *Email) SendThroughServer(host string, port uint16, username, passwor
 		password,
 		host,
 	)
-	self.Host = "localhost"
+
+	if err := client.Hello("localhost"); err != nil {
+		return err
+	}
 
 	debug("Connected, now send email\n")
 	return self.send(auth, host, client)
@@ -97,16 +99,26 @@ func (self *Email) Send() error {
 		return errors.New("553 Bad ToEmail")
 	}
 
-	dialFunc,err := self.dialFunction()
-	if err != nil {
-		return errors.New(fmt.Sprintf("421 %v", err))
-	}
+	//dialFunc,err := self.dialFunction()
+	//if err != nil {
+	//	return errors.New(fmt.Sprintf("421 %v", err))
+	//}
+	//
+	//client, err := self.newClient(server, dialFunc)
+	//if err != nil {
+	//	return errors.New(fmt.Sprintf("421 %v", err))
+	//}
+	//defer client.Close()
 
-	client, err := self.newClient(server, dialFunc)
+	c := &Connect{}
+	c.hostname = self.Host
+	c.mapIP = self.MapIp
+	c.iface = self.Ip
+	c.portSMTP = int(self.Port)
+	client, err := c.newClient(server, true)
 	if err != nil {
-		return errors.New(fmt.Sprintf("421 %v", err))
+		return errors.New("421 Connect to server error: " + err.Error())
 	}
-	defer client.Close()
 
 	return self.send(nil, "", client)
 }
@@ -120,11 +132,7 @@ var testHookStartTLS func(*tls.Config)
 
 // Send sending email message
 func (self *Email) send(auth smtp.Auth, host string, client *smtp.Client) error {
-	var	err error
-
-	if err := client.Hello(strings.TrimRight(self.Host, ".")); err != nil {
-		return err
-	}
+	var err error
 
 	if auth != nil {
 		if ok, _ := client.Extension("STARTTLS"); ok {
@@ -172,7 +180,7 @@ func (self *Email) send(auth smtp.Auth, host string, client *smtp.Client) error 
 
 type conn func(network, address string) (net.Conn, error)
 
-func (self *Email) dialFunction() (conn, error){
+func (self *Email) dialFunction() (conn, error) {
 	var dialFunc conn
 
 	if self.Ip == "" {
@@ -216,57 +224,56 @@ func (self *Email) dialFunction() (conn, error){
 	return dialFunc, nil
 }
 
-
-func (self *Email) newClient(server string, dialFunc conn) (client *smtp.Client, err error) {
-	var	conn net.Conn
-
-	records, err := net.LookupMX(server)
-	if err != nil {
-		return
-	}
-	debug("MX for domain:\n")
-	for i := range records {
-		debug(" - ", records[i].Pref, " ", records[i].Host, "\n")
-	}
-
-	for i := range records {
-		server := strings.TrimRight(strings.TrimSpace(records[i].Host), ".")
-		debug("Connect to server ", server, "\n")
-		conn, err = dialFunc("tcp", net.JoinHostPort(server, fmt.Sprintf("%d", self.Port)))
-		if err != nil {
-			debug("Not connected\n")
-			continue
-		}
-		debug("Connected\n")
-		client, err = smtp.NewClient(conn, server)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		return
-	}
-
-	conn.SetDeadline(time.Now().Add(5 * time.Minute)) // SMTP RFC
-
-	if self.Ip == "" {
-		self.Ip = conn.LocalAddr().String()
-	}
-
-	if self.Host == "" {
-		var myGlobalIP string
-		myIp, _, err := net.SplitHostPort(strings.TrimLeft(self.Ip, "socks://"))
-		myGlobalIP, ok := self.MapIp[myIp]
-		if !ok {
-			myGlobalIP = myIp
-		}
-		names, err := net.LookupAddr(myGlobalIP)
-		if err != nil && len(names) < 1 {
-			return nil, err
-		}
-		debug("LookUp ", myGlobalIP, " this result ", names[0], "\n")
-		self.Host = names[0]
-	}
-
-	return
-}
+//func (self *Email) newClient(server string, dialFunc conn) (client *smtp.Client, err error) {
+//	var	conn net.Conn
+//
+//	records, err := net.LookupMX(server)
+//	if err != nil {
+//		return
+//	}
+//	debug("MX for domain:\n")
+//	for i := range records {
+//		debug(" - ", records[i].Pref, " ", records[i].Host, "\n")
+//	}
+//
+//	for i := range records {
+//		server := strings.TrimRight(strings.TrimSpace(records[i].Host), ".")
+//		debug("Connect to server ", server, "\n")
+//		conn, err = dialFunc("tcp", net.JoinHostPort(server, fmt.Sprintf("%d", self.Port)))
+//		if err != nil {
+//			debug("Not connected\n")
+//			continue
+//		}
+//		debug("Connected\n")
+//		client, err = smtp.NewClient(conn, server)
+//		if err == nil {
+//			break
+//		}
+//	}
+//	if err != nil {
+//		return
+//	}
+//
+//	conn.SetDeadline(time.Now().Add(5 * time.Minute)) // SMTP RFC
+//
+//	if self.Ip == "" {
+//		self.Ip = conn.LocalAddr().String()
+//	}
+//
+//	if self.Host == "" {
+//		var myGlobalIP string
+//		myIp, _, err := net.SplitHostPort(strings.TrimLeft(self.Ip, "socks://"))
+//		myGlobalIP, ok := self.MapIp[myIp]
+//		if !ok {
+//			myGlobalIP = myIp
+//		}
+//		names, err := net.LookupAddr(myGlobalIP)
+//		if err != nil && len(names) < 1 {
+//			return nil, err
+//		}
+//		debug("LookUp ", myGlobalIP, " this result ", names[0], "\n")
+//		self.Host = names[0]
+//	}
+//
+//	return
+//}

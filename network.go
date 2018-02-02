@@ -1,8 +1,8 @@
 package directEmail
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 	"net"
 )
 

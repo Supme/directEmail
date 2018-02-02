@@ -1,5 +1,7 @@
 # directEmail
 
+Deprecate: later use https://github.com/Supme/smtpSender
+
 Example
 
 ```

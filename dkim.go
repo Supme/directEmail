@@ -18,7 +18,7 @@ func (self *Email) dkimSign(selector string, privateKey []byte) error {
 	options.AddSignatureTimestamp = true
 	options.Canonicalization = "simple/simple"
 
-	email :=  self.GetRawMessageBytes()
+	email := self.GetRawMessageBytes()
 
 	if self.bodyLenght >= 50 {
 		options.BodyLength = 50

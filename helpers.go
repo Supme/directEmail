@@ -3,12 +3,12 @@ package directEmail
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"golang.org/x/net/idna"
 	"math/rand"
 	"mime"
 	"strings"
-	"errors"
-	"golang.org/x/net/idna"
 )
 
 func (self *Email) makeMarker() string {
@@ -48,7 +48,7 @@ func (self *Email) encodeRFC2045(s string) string {
 	return mime.BEncoding.Encode("utf-8", s)
 }
 
-func (self *Email) domainFromEmail(email string) (string, error){
+func (self *Email) domainFromEmail(email string) (string, error) {
 	splitEmail := strings.SplitN(email, "@", 2)
 	if len(splitEmail) != 2 {
 		return "", errors.New("Bad from email address")

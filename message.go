@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+
 // SetRawMessageBytes
 func (self *Email) SetRawMessageBytes(data []byte) error {
 	self.raw.Reset()
